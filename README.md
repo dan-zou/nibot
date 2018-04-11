@@ -12,9 +12,5 @@ to prepare
 
 to run random-generator.py
 
-1. change the chat history directory
-2. change the chat directories
-3. run random-generator.py
-
-the function to generate random chats at the bottom
-
+1. create/update env.py based on env.py.template
+2. python random-generator.py
