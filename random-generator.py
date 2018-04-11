@@ -1,13 +1,38 @@
 import pandas as pd
 import nltk
 import numpy as np
+import unicodedata
 
 from nltk.tag.perceptron import PerceptronTagger
+from multiprocessing import Pool
+from subprocess import call
 
+import sys
 import datetime
 import re
+import time
 
-chat_history_directory = "FILL ME IN"
+import env
+
+chat_history_directory = env.chat_history_directory
+rooms = env.rooms
+
+post_to = env.post_to
+headers = "Content-Type: application/json"
+payload = '"color":"{color}","message":"{message}","notify":{notify},"message_format":"text"'
+
+seconds_to_wait = env.seconds_to_wait
+
+if len(sys.argv) > 1:
+
+    seconds_to_wait = int(sys.argv[1])
+
+def get_curl_command(post_to, headers, payload, message):
+
+    notify = "true"
+    if random.uniform(0,1) < env.notify_probability:
+        notify = "false"
+    return "curl -d '{" + payload.format(color=env.color,message=message,notify=notify) + "}' -H '" + headers + "' " + post_to
 
 def tokenize_and_tag(series):
     
@@ -25,10 +50,6 @@ def parallel_tokenize(series):
     pool.join()
     
     return result
-
-from multiprocessing import Pool
-
-rooms = ['CHAT ROOM 1','CHAT ROOM 2']
 
 result_dfs = []
 
@@ -66,6 +87,9 @@ for room in rooms:
 
 result_df = pd.concat(result_dfs)
 
+if env.userbot:
+
+    result_df = result_df[result_df['user'] == env.userbot]
 
 # construct pos corpus
 pos_corpus_df = pd.concat(list(result_df['tokens'].map(lambda x: pd.DataFrame(x))))
@@ -278,9 +302,34 @@ def generate_random_message():
         
     print ""
     print sentence.lower()
+    return sentence.lower()
+
+def unicode_to_ascii(string):
+    """
+    Converts any object that can be cast as a unicode (e.g. a str is fine) into an ascii-representable string.
+
+    Unicode characters are re-represented as ascii characters using unicodedata.normalize with the NFKD option, see
+    https://docs.python.org/2/library/unicodedata.html.
+
+    :param string: the original object (basestring) to represent as ascii
+    :return: ascii str that is a translation of string
+    :rtype: str
+    """
+    # make sure the object is a basestring before converting it to a string (e.g. doesn't convert None to 'None')
+    if isinstance(string,basestring):
+        return unicodedata.normalize('NFKD', unicode(string)).encode('ascii', 'ignore')
+    return string
+
 
 while True:
 
-    generate_random_message()
-    temp = raw_input("Continue...")
+    command = get_curl_command(post_to=post_to, headers=headers, payload=payload, message=unicode_to_ascii(generate_random_message()).replace('"',"'").replace("'","'\\''").replace("@","[@]"))
+    call(command, shell = True)
+    print datetime.datetime.now()
+    print command
+    if seconds_to_wait == 0:
+        temp = raw_input("Continue...")
+    else:
+        time.sleep(seconds_to_wait)
+
 
